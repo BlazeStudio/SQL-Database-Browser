@@ -318,7 +318,6 @@ def apply_changes2():
 @app.route('/<table>/content/', methods=['GET', 'POST'])
 @require_database
 def table_content(table):
-    # filter
     columns_count = dataset.get_table(table)
     ordering = request.args.get('ordering')
     rows_per_page = app.config['ROWS_PER_PAGE']

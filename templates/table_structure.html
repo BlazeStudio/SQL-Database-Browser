@@ -23,8 +23,8 @@
   {{ table_sql|format_create_table|highlight }}
 
   <h3 id="columns">
-    <p class="pull-right"><a class="btn btn-primary btn-sm" href="{{ url_for('add_column',table=table) }}">Добавить столбец</a></p>
-    Columns
+    <p class="pull-right"><a style="background: #db7533; border: 1px solid #db7533" class="btn btn-primary btn-sm" href="{{ url_for('add_column',table=table) }}">Добавить столбец</a></p>
+    Столбцы
   </h3>
   <table class="table table-striped">
     <thead>
@@ -52,9 +52,9 @@
             {% endif %}
           </td>
           <td>
-            <a href="{{ url_for('rename_column',table=table,rename=info[1]) }}">Переименовать</a>
+            <a style="color: #db7533" href="{{ url_for('rename_column',table=table,rename=info[1]) }}">Переименовать</a>
             <span class="separator">|</span>
-            <a href="{{ url_for('delete_column',table=table,name=info[1]) }}">Удалить</a>
+            <a style="color: #db7533" href="{{ url_for('delete_column',table=table,name=info[1]) }}">Удалить</a>
           </td>
         </tr>
       {% endfor %}

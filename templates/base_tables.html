@@ -7,14 +7,19 @@
   <ul class="nav nav-pills nav-stacked" role="tablist">
     {% for table_name in dataset.tables|sort %}
       {% if table_name not in virtual_tables_corollary %}
-      <li class="table-link{% if table and table_name == table %} active{% endif %}">
-        <a href="{{ url_for('table_info',table=table_name) }}">
-          {{ table_name|upper }}
+          {% if table and table_name == table %}
+      <li class="table-link">
+        <a style="color: #fff0f0; background: #db7533" href="{{ url_for('table_info',table=table_name) }}">
+          {% else %}
+          <li class="table-link">
+        <a style="color: #db7533" href="{{ url_for('table_info',table=table_name) }}">
+          {% endif %}
+      {{ table_name }}
         </a>
       </li>
       {% endif %}
     {% endfor %}
-      <li class="table-link"><a href="{{ url_for('close') }}" style="color: red;">Закрыть</a></li>
+      <li class="table-link"><a href="{{ url_for('close') }}" style="color: red;"><b>Закрыть</b></a></li>
   </ul>
   {% endif %}
 {% endblock %}

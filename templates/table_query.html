@@ -1,5 +1,4 @@
 {% extends "base_table.html" %}
-
 {% block extra_head %}
 <style type="text/css">
   pre { clear: right; }
@@ -40,7 +39,7 @@
 {% block inner_content %}
   <h3>
     <p class="pull-right">
-      <a class="btn btn-primary btn-xs" href="#" id="toggleTableInfo">+/- table definition</a>
+      <a style="color: #fff0f0; background: #db7533; border: 1px solid #db7533" class="btn btn-primary btn-xs" href="#" id="toggleTableInfo">+/- Определение таблицы</a>
     </p>
     Запрос
   </h3>
@@ -55,7 +54,7 @@
         <span class="help-block">{{ error }}</span>
       {% endif %}
     </div>
-    <button class="btn btn-primary" type="submit">Выполнить</button>
+    <button style="color: #fff0f0; background: #db7533; border: 1px solid #db7533" class="btn btn-primary" type="submit">Выполнить</button>
   </form>
   <hr/>
 

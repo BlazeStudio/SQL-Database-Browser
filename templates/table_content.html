@@ -75,8 +75,8 @@
       <tr>
         {% for info in infos %}
           <th>
-            <input type="text" class="form-control column-filter" data-column="{{ loop.index0 }}" placeholder="Фильтр...">
-            <a href="./?ordering={% if ordering == info[1] %}-{% endif %}{{ info[1] }}">{{ info[1] }}</a>
+            <input type="text" style="font-weight: normal" class="form-control column-filter" data-column="{{ loop.index0 }}" placeholder="Фильтр..."><br>
+            <a style="color: #db7533" href="./?ordering={% if ordering == info[1] %}-{% endif %}{{ info[1] }}">{{ info[1] }}</a>
           </th>
         {% endfor %}
       </tr>
