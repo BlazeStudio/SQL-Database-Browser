@@ -2,8 +2,8 @@
 
 {% block sidebar %}
   {% if dataset %}
-  <input class="form-control input-sm" id="table-search" placeholder="Название таблицы" type="text" />
-      <br>
+  <input style="box-shadow: none; outline: none; border: 1px solid lightgrey" class="form-control" id="table-search" placeholder="Поиск" type="text" />
+      <h5 style="color: darkgrey; text-align: center; margin-top: 15px">Таблицы</h5><hr style="margin-top: 10px; margin-bottom: 15px">
   <ul class="nav nav-pills nav-stacked" role="tablist">
     {% for table_name in dataset.tables|sort %}
       {% if table_name not in virtual_tables_corollary %}

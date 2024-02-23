@@ -1,14 +1,8 @@
 import os
 import re
-import sys
-import csv
-import json
 import sqlite3
 import datetime
-import collections
-import tempfile
 from functools import wraps
-from collections import namedtuple, OrderedDict
 
 try:
     from flask import (Flask, render_template, request, abort, session,
@@ -31,7 +25,6 @@ else:
         return highlight(data, lexer, formatter)
 
 
-# Settings
 # CUR_DIR = os.path.realpath(os.path.dirname(__file__))
 DEBUG = True
 SECRET_KEY = 'sqlite-database-browser-0.1.0'
@@ -39,14 +32,10 @@ MAX_RESULT_SIZE = 50
 ROWS_PER_PAGE = 20
 OUT_FOLDER = 'export_file'
 
-# Variables
-
 app = Flask(__name__)
 app.config.from_object(__name__)
 
 dataset = None
-
-# Database Tools
 
 class SqliteTools():
 
@@ -61,7 +50,6 @@ class SqliteTools():
 
     @property
     def location(self):
-        print(os.path.abspath(self.file))
         return os.path.abspath(self.file)
 
     @property
@@ -95,7 +83,6 @@ class SqliteTools():
         return sql
 
     def update_cell(self,sql, data):
-        # Выполняем SQL-запрос для обновления ячейки
         self.cursor.execute(sql, data)
         self.db.commit()
     def get_table_info(self, table):
@@ -164,13 +151,26 @@ class SqliteTools():
         else:
             return False
 
-    def add_row(self, table, row):
-        columns = ', '.join(row.keys())
-        placeholders = ', '.join(['?' for _ in row])
-        values = tuple(row.values())
-        sql = f"INSERT INTO {table} ({columns}) VALUES ({placeholders})"
-        self.cursor.execute(sql, values)
+    def add_row(self, table):
+        self.cursor.execute(f"PRAGMA table_info({table})")
+        columns_info = self.cursor.fetchall()
+        values = []
+        for column_info in columns_info:
+            column_name = column_info[1]
+            if column_name == "id" and column_info[5]:  # Проверяем, является ли столбец уникальным ключом и автоинкрементируемым
+                # Используем NULL, чтобы база данных сама сгенерировала значение
+                values.append('NULL')
+            elif column_info[3] == 1:  # Если столбец не позволяет NULL значений
+                values.append("''")  # Заполняем пустым символом
+            else:
+                values.append('NULL')  # Заполняем NULL
 
+        columns_str = ', '.join(column_info[1] for column_info in columns_info)
+        values_str = ', '.join(values)
+        query = f"INSERT INTO {table} ({columns_str}) VALUES ({values_str})"
+
+        self.cursor.execute(query)
+        self.db.commit()
 
     def rename_cloumn(self, table, rename, rename_to):
         sql = self.cursor.execute('SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?',
@@ -190,7 +190,6 @@ class SqliteTools():
     @property
     def reset(self):
         self.db.rollback()
-
 
 def require_database(fn):
     @wraps(fn)
@@ -215,7 +214,6 @@ def index():
             flash('Не выбрана база данных SQL', 'danger')
         else:
             file.save(file.filename)
-            print(file)
             database = file.filename
             return redirect(url_for('index'))
     return render_template('index.html')
@@ -301,6 +299,12 @@ def add_column(table):
         return redirect(url_for('add_column', table=table))
     return render_template('add_column.html', column_mapping=column_mapping, table=table)
 
+@app.route('/<table>/add-row/', methods=['GET', 'POST'])
+@require_database
+def add_row(table):
+    dataset.add_row(table)
+    return redirect(url_for('table_content', table=table))
+
 @app.route('/apply_changes2', methods=['POST'])
 def apply_changes2():
     table = request.form.get('table_name')
@@ -352,10 +356,6 @@ def table_query(table):
     row_count, error, data, data_description = None, None, None, None
     if request.method == 'POST':
         sql = request.form.get('sql', '')
-        if 'export_json' in request.form:
-            return export(table, sql, 'json')
-        elif 'export_csv' in request.form:
-            return export(table, sql, 'csv')
         try:
             cur = dataset.cursor.execute(sql)
             dataset.db.commit()
@@ -378,7 +378,6 @@ def table_query(table):
         data_description=data_description,
         table=table,
         sql=sql,
-        query_images=get_query_images(),
         error=error,
         table_sql=dataset.table_sql(table)
     )
@@ -390,7 +389,7 @@ def table_create():
     if not table:
         flash('Введите имя таблицы.', 'danger')
         return redirect(request.referrer)
-    dataset.cursor.execute('CREATE TABLE %s(id INTEGER NOT NULL PRIMARY KEY)' % table)
+    dataset.cursor.execute('CREATE TABLE %s(id INTEGER NOT NULL PRIMARY KEY )' % table)
     return redirect(url_for('table_info', table=table))
 
 
@@ -415,37 +414,6 @@ def close():
     dataset = None
     database = None
     return redirect(url_for('index'))
-
-
-def export(table, sql, export_format):
-    cur = dataset.cursor.execute(sql)
-    data = cur.fetchall()
-    data_description = cur.description
-    row_count = cur.rowcount
-    filename_path = '%s/%s_export.%s' % (
-        app.config['OUT_FOLDER'], table, export_format)
-    filename = '%s_export.%s' % (table, export_format)
-    if not os.path.exists(app.config['OUT_FOLDER']):
-        os.mkdir(app.config['OUT_FOLDER'])
-    if export_format == 'csv':
-        data.insert(0, [row[0] for row in data_description])
-        with open(filename_path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            for row in data:
-                writer.writerow(row)
-    elif export_format == 'json':
-        datas = []
-        rows = [row[0] for row in data_description]
-        for d in data:
-            dd = OrderedDict()
-            for i in range(len(rows)):
-                dd[rows[i]] = d[i]
-            datas.append(dd)
-        with open(filename_path, 'w') as f:
-            json.dump(datas, f, indent=4,
-                      ensure_ascii=False)
-    dirpath = os.path.join(app.root_path, app.config['OUT_FOLDER'])
-    return send_from_directory(dirpath, filename, as_attachment=True)
 
 
 @app.route('/table-definition/', methods=['POST'])
@@ -486,31 +454,17 @@ def highlight_filter(data):
     return Markup(syntax_highlight(data))
 
 
-def get_query_images():
-    accum = []
-    image_dir = os.path.join(app.static_folder, 'img')
-    if not os.path.exists(image_dir):
-        return accum
-    for filename in sorted(os.listdir(image_dir)):
-        basename = os.path.splitext(os.path.basename(filename))[0]
-        parts = basename.split('-')
-        accum.append((parts, 'img/' + filename))
-    return accum
-
-
 @app.context_processor
 def _general():
     return {
         'dataset': dataset,
     }
 
-
 @app.before_request
 def _before_request():
     if database:
         global dataset
         dataset = SqliteTools(database)
-
 
 @app.teardown_request
 def _reset_db(e):
@@ -524,6 +478,5 @@ def main():
     database = None
     app.run()
 
-# Run
 if __name__ == '__main__':
     main()

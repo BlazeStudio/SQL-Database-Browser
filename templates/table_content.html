@@ -4,24 +4,20 @@
    <script src="/static/js/content.js"></script>
 {% endblock %}
 
-{% block content_title %}
-  {{ super() }}
-  <small>{{ columns_count|length }} строк, страница {{ page }}</small>
-{% endblock %}
-
 {% block content_tab_class %}active{% endblock %}
 
 {% block inner_content %}
     <div id="your_table" data-table="{{ table }}">
 </div>
+    <p style="margin-top: 10px" class="pull-right"><a style="background: #db7533; border: 1px solid #db7533" class="btn btn-primary btn-sm" href="{{ url_for('add_row',table=table, rows=columns_count) }}">Добавить строку</a></p>
 <div class="table-responsive">
   <table class="table table-striped">
     <thead>
       <tr>
         {% for info in infos %}
           <th style="border-bottom: 1px solid darkgrey">
-            <input type="text" style="font-weight: normal" class="form-control column-filter" data-column="{{ loop.index0 }}" placeholder="Фильтр..."><br>
-            <a style="color: #db7533;" href="./?ordering={% if ordering == info[1] %}-{% endif %}{{ info[1] }}">{{ info[1] }}</a>
+            <input style="box-shadow: none; outline: none; border: 1px solid lightgrey; font-weight: normal" type="text" class="form-control column-filter" data-column="{{ loop.index0 }}" placeholder="Фильтр..."><br>
+            <a style="color: black;" href="./?ordering={% if ordering == info[1] %}-{% endif %}{{ info[1] }}">{{ info[1] }}</a>
           </th>
         {% endfor %}
       </tr>
@@ -30,7 +26,7 @@
       {% for column in columns %}
         <tr>
             {% for cell in column %}
-            <td style="border: 1px solid darkgrey" contenteditable>{{ cell }}</td>
+            <td style="border: 1px solid darkgrey" contenteditable>{% if cell == None %}<i style="color: darkgrey">Null</i>{% else %}{{ cell }}{% endif %}</td>
             {% endfor %}
         </tr>
       {% endfor %}
@@ -46,7 +42,7 @@
         <a href="{{ url_for('table_content', table=table, page=previous_page, ordering=ordering) }}">&larr; Предыдущая</a>
         {% endif %}
       </li>
-      <li>Страница {{ page }} / {{ total_pages }}</li>
+      <li>Страница {{ page }} / {% if total_pages == 0 %}1{% else %}{{ total_pages }}{% endif %}</li>
       <li class="{% if not next_page %}disabled {% endif %}next">
         {% if not next_page %}
         <a href=" ">Следующая &rarr;</a>
