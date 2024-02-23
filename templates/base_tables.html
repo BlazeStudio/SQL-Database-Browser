@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+
+{% block sidebar %}
+  {% if dataset %}
+  <input class="form-control input-sm" id="table-search" placeholder="Название таблицы" type="text" />
+      <br>
+  <ul class="nav nav-pills nav-stacked" role="tablist">
+    {% for table_name in dataset.tables|sort %}
+      {% if table_name not in virtual_tables_corollary %}
+      <li class="table-link{% if table and table_name == table %} active{% endif %}">
+        <a href="{{ url_for('table_info',table=table_name) }}">
+          {{ table_name|upper }}
+        </a>
+      </li>
+      {% endif %}
+    {% endfor %}
+      <li class="table-link"><a href="{{ url_for('close') }}" style="color: red;">Закрыть</a></li>
+  </ul>
+  {% endif %}
+{% endblock %}

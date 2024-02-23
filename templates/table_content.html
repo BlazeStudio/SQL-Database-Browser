@@ -1,0 +1,117 @@
+{% extends "base_table.html" %}
+
+{% block extra_scripts %}
+
+  <script type="text/javascript">
+    $(function() {
+      // Фильтрация таблицы по значениям столбцов
+      $('.column-filter').on('input', function() {
+        var columnIndex = $(this).data('column');
+        var filterValue = $(this).val().toLowerCase();
+        $('table tbody tr').each(function() {
+          var cellValue = $(this).find('td').eq(columnIndex).text().toLowerCase();
+          if (cellValue.includes(filterValue)) {
+            $(this).show();
+          } else {
+            $(this).hide();
+          }
+        });
+      });
+
+      // Обработчик клика по ячейке для изменения ее значения
+      $('table td').on('click', function() {
+        $(this).attr('contenteditable', true).focus();
+      });
+
+  // Обработчик события потери фокуса ячейкой, чтобы закончить редактирование
+  $('table td').on('focusout', function() {
+    $(this).removeAttr('contenteditable');
+    // Получаем новое значение ячейки
+    var newValue = $(this).text();
+    // Получаем данные о столбце и строке
+    var columnIndex = $(this).index();
+    var rowIndex = $(this).parent().index();
+    var columnLabel = $('thead th').eq(columnIndex).text();
+    var rowLabel = $('tbody tr').eq(rowIndex).find('td').first().text();
+    var table = $('#your_table').data('table');
+    // Отправляем AJAX запрос только если значение изменилось
+    if ($(this).data('originalValue') !== newValue) {
+      $.ajax({
+        type: 'POST',
+        url: '/apply_changes2',
+        data: {
+          table_name: table,
+          columnLabel: columnLabel,
+          rowLabel: rowLabel,
+          newValue: newValue
+        },
+        success: function(response) {
+          console.log('Данные успешно отправлены на сервер.');
+        },
+        error: function(error) {
+          console.error('Произошла ошибка при отправке данных на сервер:', error);
+        }
+      });
+    }
+  });
+
+    });
+  </script>
+{% endblock %}
+
+{% block content_title %}
+  {{ super() }}
+  <small>{{ columns_count|length }} строк, страница {{ page }}</small>
+{% endblock %}
+
+{% block content_tab_class %}active{% endblock %}
+
+{% block inner_content %}
+    <div id="your_table" data-table="{{ table }}">
+</div>
+<div class="table-responsive">
+  <table class="table table-striped">
+    <thead>
+      <tr>
+        {% for info in infos %}
+          <th>
+            <input type="text" class="form-control column-filter" data-column="{{ loop.index0 }}" placeholder="Фильтр...">
+            <a href="./?ordering={% if ordering == info[1] %}-{% endif %}{{ info[1] }}">{{ info[1] }}</a>
+          </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for column in columns %}
+        <tr>
+            {% for cell in column %}
+            <td contenteditable>{{ cell }}</td>
+            {% endfor %}
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+  <nav>
+    <ul class="pager">
+      <li class="{% if not previous_page %}disabled {% endif %}previous">
+        {% if not previous_page %}
+        <a href=" ">&larr; Предыдущая</a>
+        {% else %}
+        <a href="{{ url_for('table_content', table=table, page=previous_page, ordering=ordering) }}">&larr; Предыдущая</a>
+        {% endif %}
+      </li>
+      <li>Страница {{ page }} / {{ total_pages }}</li>
+      <li class="{% if not next_page %}disabled {% endif %}next">
+        {% if not next_page %}
+        <a href=" ">Следующая &rarr;</a>
+        {% else %}
+        <a href="{{ url_for('table_content', table=table, page=next_page, ordering=ordering) }}">Следующая &rarr;</a>
+        {% endif %}
+      </li>
+    </ul>
+  </nav>
+
+
+
+{% endblock %}
