@@ -33,7 +33,7 @@ $(function() {
     if ($(this).data('originalValue') !== newValue) {
       $.ajax({
         type: 'POST',
-        url: '/apply_changes2',
+        url: '/apply_changes',
         data: {
           table_name: table,
           columnLabel: columnLabel,

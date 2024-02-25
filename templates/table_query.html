@@ -6,34 +6,6 @@
 </style>
 {% endblock %}
 
-{% block extra_scripts %}
-  <script type="text/javascript">
-    $(function() {
-      var tableInfo = $('div#tableInfo');
-
-      $('a.sql-image').on('click', function(e) {
-        e.preventDefault();
-        var elem = $(this),
-            imgUrl = elem.attr('href'),
-            modalDiv = $('div#sql-image-modal');
-        modalDiv.find('h4.modal-title').text(elem.text());
-        modalDiv.find('.modal-body').empty().append(
-          $('<img src="' + imgUrl + '" />'));
-        modalDiv.modal();
-      });
-
-      $('a#toggleTableInfo').on('click', function(e) {
-        var show = !tableInfo.is(':visible');
-        e.preventDefault();
-        tableInfo.toggle('slide');
-        $.post('{{ url_for('set_table_definition_preference') }}', {'show': show}, function(resp) {
-          console.log('preference logged, new value: ' + resp.show);
-        });
-      });
-    });
-  </script>
-{% endblock %}
-
 {% block query_tab_class %}active{% endblock %}
 
 {% block inner_content %}

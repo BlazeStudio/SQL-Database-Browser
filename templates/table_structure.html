@@ -1,20 +1,8 @@
 {% extends "base_table.html" %}
 
-{% block extra_scripts %}
-  <script type="text/javascript">
-    $(function() {
-      $('a.view-sql').on('click', function(e) {
-        e.preventDefault();
-        var elem = $(this),
-            pre = elem.siblings('div'),
-            modalDiv = $('div#sql-modal');
-        modalDiv.find('h4.modal-title').text(elem.data('name'));
-        modalDiv.find('.modal-body').empty().append(pre.clone().show());
-        modalDiv.modal();
-      });
-    });
-  </script>
-{% endblock %}
+{#{% block extra_scripts %}#}
+{#  <script type="text/javascript" src="/static/js/structure.js"></script>#}
+{#{% endblock %}#}
 
 {% block structure_tab_class %}active{% endblock %}
 

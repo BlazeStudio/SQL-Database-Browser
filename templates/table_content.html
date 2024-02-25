@@ -2,6 +2,11 @@
 
 {% block extra_scripts %}
    <script src="/static/js/content.js"></script>
+    <script>
+function hideContent(element) {
+  element.textContent = ''; // Устанавливаем текст содержимого ячейки пустым
+}
+</script>
 {% endblock %}
 
 {% block content_tab_class %}active{% endblock %}
@@ -26,7 +31,7 @@
       {% for column in columns %}
         <tr>
             {% for cell in column %}
-            <td style="border: 1px solid darkgrey" contenteditable>{% if cell == None %}<i style="color: darkgrey">Null</i>{% else %}{{ cell }}{% endif %}</td>
+            <td style="border: 1px solid darkgrey" onclick="hideContent(this)" contenteditable>{% if cell == None %}<i style="color: darkgrey">Null</i>{% else %}{{ cell }}{% endif %}</td>
             {% endfor %}
         </tr>
       {% endfor %}

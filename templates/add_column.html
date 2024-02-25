@@ -16,6 +16,15 @@
       {% endfor %}
     </select>
   </div>
+<div class="form-group">
+    <label>Атрибуты столбца:</label><br>
+    <input type="checkbox" id="not_null" name="not_null">
+    <label for="not_null">NOT NULL</label><br>
+    <input type="checkbox" id="unique" name="unique">
+    <label for="unique">UNIQUE</label><br>
+    <input type="checkbox" id="autoincrement" name="autoincrement">
+    <label for="autoincrement">AUTOINCREMENT</label><br>
+  </div>
   <button class="btn btn-primary" type="submit">Добавить столбец</button>
   <a class="btn btn-default" href="{{ url_for('table_info', table=table) }}">Отмена</a>
 </form>

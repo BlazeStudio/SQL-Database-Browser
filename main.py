@@ -3,10 +3,11 @@ import re
 import sqlite3
 import datetime
 from functools import wraps
+from markupsafe import Markup
 
 try:
     from flask import (Flask, render_template, request, abort, session,
-                       flash, redirect, url_for, Markup, make_response, send_file, send_from_directory, jsonify)
+                       flash, redirect, url_for, make_response, send_file, send_from_directory, jsonify)
 except ImportError:
     raise RuntimeError('Unable to import flask module. Install by running '
                        'pip install flask')
@@ -122,34 +123,98 @@ class SqliteTools():
         self.cursor.execute(sql)
 
     def delete_column(self, table, column):
-        sql = self.cursor.execute('SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?',
-                                  [table, 'table']).fetchone()[0]
-        if len(re.findall('\\b' + column + '\\b', sql)) != 1:
-            return False
-        self.cursor.execute(
-            "ALTER TABLE %s RENAME TO old_%s" % (table, table))
-        sql = re.sub(column + '.+,\s+', '', sql)
-        self.cursor.execute(sql)
-        infos = self.get_table_info("old_%s" % table)
-        old_columns = ','.join([row[1] for row in infos if row[1] != column])
-        infos = self.get_table_info(table)
-        new_columns = ','.join([row[1] for row in infos])
-        sql = 'INSERT INTO %s(%s) SELECT %s FROM old_%s;' % (
-            table, new_columns, old_columns, table)
-        if 'default' in sql:
-            sql = sql.replace('default', '"default"')
-        self.cursor.execute(sql)
-        self.delete_table("old_%s" % table)
-        return True
+        self.cursor.execute(f"PRAGMA table_info({table})")
+        columns_info = self.cursor.fetchall()
 
-    def add_column(self, table, column, column_type):
+        # Формируем список столбцов и их атрибутов для временной таблицы, исключая столбец, который мы хотим удалить
+        new_columns = []
+        for column_info in columns_info:
+            if column_info[1] != column:
+                column_name = column_info[1]
+                column_type = column_info[2]
+                # Добавляем атрибуты PRIMARY KEY, UNIQUE и NOT NULL, если они присутствуют в исходной таблице
+                if column_info[3] == 1:
+                    column_type += " NOT NULL"
+                if column_info[5] == 1:
+                    column_type += " PRIMARY KEY"
+                if column_info[4] == 1:
+                    column_type += " UNIQUE"
+                new_columns.append(f"{column_name} {column_type}")
+
+        # Проверяем, остались ли еще столбцы в таблице
+        if len(new_columns) == 0:
+            return flash('Невозможно удалить последний столбец в таблице', 'danger')
+
+        # Создаем временную таблицу с новой структурой и данными из исходной таблицы
+        self.cursor.execute(f"CREATE TABLE temp_{table} ({', '.join(new_columns)})")
+        self.cursor.execute(
+            f"INSERT INTO temp_{table} SELECT {', '.join([col_info[1] for col_info in columns_info if col_info[1] != column])} FROM {table}")
+
+        # Удаляем исходную таблицу
+        self.cursor.execute(f"DROP TABLE {table}")
+
+        # Переименовываем временную таблицу обратно в исходное имя
+        self.cursor.execute(f"ALTER TABLE temp_{table} RENAME TO {table}")
+        self.db.commit()
+
+        return flash('Столбец "%s" был успешно удалён' % column, 'success')
+
+    def add_column(self, table, column, column_type, unique=True):
+        self.cursor.execute(f"SELECT COUNT(*) FROM {table}")
+        count = self.cursor.fetchone()[0]
+        if (count > 0) and ("AUTOINCREMENT" in column_type):
+            flash("AUTOINCREMENT не может быть применён, так как в таблице уже созданы строки", 'danger')
+            return False
         columns = [row[1] for row in self.get_table_info(table)]
-        if column and column not in columns and column_type:
-            self.cursor.execute('ALTER TABLE %s ADD COLUMN %s %s' %
-                                (table, column, column_type))
+        if column and column_type:
+            # Создаем временную таблицу
+            temp_table_name = f"temp_{table}"
+
+            self.cursor.execute(f"PRAGMA table_info({table})")
+            source_columns_info = self.cursor.fetchall()
+
+            # Составляем список столбцов и их атрибутов для новой таблицы
+            new_columns = [f"{col_info[1]} {' '.join(col_info[2:])}" for col_info in source_columns_info]
+
+            # Создаем новую таблицу с аналогичными столбцами
+            self.cursor.execute(f"CREATE TABLE {temp_table_name} ({', '.join(new_columns)})")
+
+            # Переносим данные из исходной таблицы в новую таблицу
+            self.cursor.execute(f"INSERT INTO {temp_table_name} SELECT * FROM {table}")
+
+
+            # self.cursor.execute(f"CREATE TABLE {temp_table_name} AS SELECT * FROM {table}")
+            # # Удаляем исходную таблицу
+            # self.cursor.execute(f"DROP TABLE {table}")
+
+            # # Создаем новую таблицу с добавленным столбцом и ограничением UNIQUE
+            # self.cursor.execute(f"CREATE TABLE {table} ({', '.join(columns + [f'{column} {column_type} UNIQUE' if unique else f'{column} {column_type}'])})")
+            #
+            # # # Переносим данные из временной таблицы в новую таблицу
+            # self.cursor.execute(f"INSERT INTO {table} SELECT *, NULL FROM {temp_table_name}")
+            #
+            # # Удаляем временную таблицу
+            # self.cursor.execute(f"DROP TABLE {temp_table_name}")
+            # self.db.commit()
+
             return True
         else:
             return False
+
+
+    # def add_column(self, table, column, column_type):
+    #     self.cursor.execute(f"SELECT COUNT(*) FROM {table}")
+    #     count = self.cursor.fetchone()[0]
+    #     if (count > 0) and ("AUTOINCREMENT" in column_type):
+    #         return flash("AUTOINCREMENT не может быть применён, так как в таблице уже созданы строки")
+    #     columns = [row[1] for row in self.get_table_info(table)]
+    #     if column and column not in columns and column_type:
+    #         self.cursor.execute('ALTER TABLE %s ADD COLUMN %s INTEGER' % (table, column))
+    #         self.cursor.execute(f'ALTER TABLE {table} MODIFY COLUMN {column} NOT NULL')
+    #         self.db.commit()
+    #         return True
+    #     else:
+    #         return False
 
     def add_row(self, table):
         self.cursor.execute(f"PRAGMA table_info({table})")
@@ -183,14 +248,6 @@ class SqliteTools():
         self.copy_table("old_%s" % table, table)
         self.delete_table("old_%s" % table)
 
-    @property
-    def close(self):
-        self.db.close()
-
-    @property
-    def reset(self):
-        self.db.rollback()
-
 def require_database(fn):
     @wraps(fn)
     def inner(table, *args, **kwargs):
@@ -201,7 +258,6 @@ def require_database(fn):
         return fn(table, *args, **kwargs)
     return inner
 
-# Views
 
 
 @app.route('/', methods=('GET', 'POST'))
@@ -261,23 +317,17 @@ def delete_column(table):
     name = request.args.get('name')
     infos = dataset.get_table_info(table)
     if request.method == 'POST':
-        column_names = [row[1] for row in infos]
         name = request.form.get('name', '')
-        if name and name in column_names:
-            if dataset.delete_column(table, name):
-                flash('Столбец "%s" был успешно удалён!' %
-                      name, 'success')
-            else:
-                flash('Не удалось удалить столбец', 'danger')
+        if (name == None): flash('Столбец не указан', 'danger')
         else:
-            flash('Требуется имя столбца', 'danger')
-        return redirect(url_for('delete_column', table=table))
-
+            dataset.delete_column(table, name)
+        return redirect(url_for('table_info', table=table))
     return render_template(
         'delete_column.html',
         infos=infos,
         table=table,
         name=name)
+
 
 
 @app.route('/<table>/add-column/', methods=['GET', 'POST'])
@@ -288,12 +338,17 @@ def add_column(table):
     if request.method == 'POST':
         name = request.form.get('name', '')
         column_type = request.form.get('type', '')
+        not_null = 'NOT NULL' if request.form.get('not_null') else ''
+        unique = 'UNIQUE' if request.form.get('unique') else ''
+        autoincrement = 'AUTOINCREMENT' if request.form.get('autoincrement') else ''
+        atr = unique
+        print(atr)
         if name and column_type:
-            success = dataset.add_column(table, name, column_type)
+            success = dataset.add_column(table, name, f'{column_type} {atr}')
             if success:
                 flash('Столбец "%s" был успешно создан' % name, 'success')
             else:
-                flash('Таблица с таким именем уже существует', 'danger')
+                flash('Столбец с таким именем уже существует', 'danger')
         else:
             flash('Имя и тип не могут быть пустыми', 'danger')
         return redirect(url_for('add_column', table=table))
@@ -305,8 +360,8 @@ def add_row(table):
     dataset.add_row(table)
     return redirect(url_for('table_content', table=table))
 
-@app.route('/apply_changes2', methods=['POST'])
-def apply_changes2():
+@app.route('/apply_changes', methods=['POST'])
+def apply_changes():
     table = request.form.get('table_name')
     name = request.form.get('columnLabel')
     row = int(request.form.get('rowLabel'))
@@ -332,7 +387,7 @@ def table_content(table):
     else:
         columns = dataset.paginate(
             table=table, page=page, paginate_by=rows_per_page)
-    total_pages = len(columns_count) // rows_per_page
+    total_pages = (len(columns_count) // rows_per_page) + 1
     previous_page = page - 1
     next_page = page + 1 if page + \
         1 <= total_pages else 0
@@ -389,7 +444,7 @@ def table_create():
     if not table:
         flash('Введите имя таблицы.', 'danger')
         return redirect(request.referrer)
-    dataset.cursor.execute('CREATE TABLE %s(id INTEGER NOT NULL PRIMARY KEY )' % table)
+    dataset.cursor.execute('CREATE TABLE %s(id INTEGER NOT NULL UNIQUE PRIMARY KEY )' % table)
     return redirect(url_for('table_info', table=table))
 
 
@@ -414,17 +469,6 @@ def close():
     dataset = None
     database = None
     return redirect(url_for('index'))
-
-
-@app.route('/table-definition/', methods=['POST'])
-def set_table_definition_preference():
-    key = "show"
-    show = False
-    if request.form.get(key):
-        session[key] = show = True
-    elif key in request.session:
-        del request.session[key]
-    return jsonify({key: show})
 
 
 column_re = re.compile('(.+?)\((.+)\)', re.S)
@@ -465,13 +509,6 @@ def _before_request():
     if database:
         global dataset
         dataset = SqliteTools(database)
-
-@app.teardown_request
-def _reset_db(e):
-    if dataset:
-        dataset.reset
-        dataset.close
-
 
 def main():
     global database
