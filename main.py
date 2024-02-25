@@ -123,27 +123,20 @@ class SqliteTools():
         self.cursor.execute(sql)
 
     def delete_column(self, table, column):
+        sql = self.cursor.execute('SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?',
+                                  [table, 'table']).fetchone()[0]
+        pattern = r"\((.*?)\)"
+        match = re.search(pattern, sql)
+        columns_string = match.group(1)
+        new_columns = [column.strip() for column in columns_string.split(',')]
+        if len(new_columns) == 0: return flash('Невозможно удалить последний столбец в таблице', 'danger')
+        new_columns2 = []
+        for cur in range(len(new_columns)): new_columns2.append(new_columns[cur].split(' ')[0])
+        index = new_columns2.index(column)
+        new_columns.pop(index)
+
         self.cursor.execute(f"PRAGMA table_info({table})")
         columns_info = self.cursor.fetchall()
-
-        # Формируем список столбцов и их атрибутов для временной таблицы, исключая столбец, который мы хотим удалить
-        new_columns = []
-        for column_info in columns_info:
-            if column_info[1] != column:
-                column_name = column_info[1]
-                column_type = column_info[2]
-                # Добавляем атрибуты PRIMARY KEY, UNIQUE и NOT NULL, если они присутствуют в исходной таблице
-                if column_info[3] == 1:
-                    column_type += " NOT NULL"
-                if column_info[5] == 1:
-                    column_type += " PRIMARY KEY"
-                if column_info[4] == 1:
-                    column_type += " UNIQUE"
-                new_columns.append(f"{column_name} {column_type}")
-
-        # Проверяем, остались ли еще столбцы в таблице
-        if len(new_columns) == 0:
-            return flash('Невозможно удалить последний столбец в таблице', 'danger')
 
         # Создаем временную таблицу с новой структурой и данными из исходной таблицы
         self.cursor.execute(f"CREATE TABLE temp_{table} ({', '.join(new_columns)})")
@@ -159,62 +152,43 @@ class SqliteTools():
 
         return flash('Столбец "%s" был успешно удалён' % column, 'success')
 
-    def add_column(self, table, column, column_type, unique=True):
-        self.cursor.execute(f"SELECT COUNT(*) FROM {table}")
-        count = self.cursor.fetchone()[0]
-        if (count > 0) and ("AUTOINCREMENT" in column_type):
-            flash("AUTOINCREMENT не может быть применён, так как в таблице уже созданы строки", 'danger')
-            return False
-        columns = [row[1] for row in self.get_table_info(table)]
-        if column and column_type:
-            # Создаем временную таблицу
-            temp_table_name = f"temp_{table}"
-
+    def add_column(self, table, column, column_type2, not_null, atr):
+        self.cursor.execute(f"PRAGMA table_info({table})")
+        source_columns_info = self.cursor.fetchall()
+        if column == source_columns_info[-1][1]: return False
+        # self.cursor.execute(f"SELECT COUNT(*) FROM {table}")
+        # count = self.cursor.fetchone()[0]
+        # if (count > 0) and ("AUTOINCREMENT" in column_type):
+        #     flash("AUTOINCREMENT не может быть применён, так как в таблице уже созданы строки", 'danger')
+        #     return False
+        if column and column_type2:
+            self.cursor.execute('ALTER TABLE %s ADD COLUMN %s %s %s' % (table, column, column_type2, not_null))
+            self.cursor.execute(f"SELECT COUNT(*) FROM {table}")
+            count = self.cursor.fetchone()[0]
+            sql = self.cursor.execute('SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?',
+                                      [table, 'table']).fetchone()[0]
+            pattern = r"\((.*?)\)"
+            match = re.search(pattern, sql)
+            columns_string = match.group(1)
+            new_columns = [column.strip() for column in columns_string.split(',')]
+            if 'UNIQUE' in atr:
+                for cur in range(len(new_columns)):
+                    if (new_columns[cur].split(' ')[0]) == column:
+                        time = new_columns[cur] + ' UNIQUE'
+                        new_columns[cur] = time
             self.cursor.execute(f"PRAGMA table_info({table})")
             source_columns_info = self.cursor.fetchall()
 
-            # Составляем список столбцов и их атрибутов для новой таблицы
-            new_columns = [f"{col_info[1]} {' '.join(col_info[2:])}" for col_info in source_columns_info]
-
-            # Создаем новую таблицу с аналогичными столбцами
-            self.cursor.execute(f"CREATE TABLE {temp_table_name} ({', '.join(new_columns)})")
-
-            # Переносим данные из исходной таблицы в новую таблицу
-            self.cursor.execute(f"INSERT INTO {temp_table_name} SELECT * FROM {table}")
-
-
-            # self.cursor.execute(f"CREATE TABLE {temp_table_name} AS SELECT * FROM {table}")
-            # # Удаляем исходную таблицу
-            # self.cursor.execute(f"DROP TABLE {table}")
-
-            # # Создаем новую таблицу с добавленным столбцом и ограничением UNIQUE
-            # self.cursor.execute(f"CREATE TABLE {table} ({', '.join(columns + [f'{column} {column_type} UNIQUE' if unique else f'{column} {column_type}'])})")
-            #
-            # # # Переносим данные из временной таблицы в новую таблицу
-            # self.cursor.execute(f"INSERT INTO {table} SELECT *, NULL FROM {temp_table_name}")
-            #
-            # # Удаляем временную таблицу
-            # self.cursor.execute(f"DROP TABLE {temp_table_name}")
-            # self.db.commit()
+            self.cursor.execute(f"CREATE TABLE temp_{table} ({', '.join(new_columns)})")
+            self.cursor.execute(f"INSERT INTO temp_{table} SELECT {', '.join([col_info[1] for col_info in source_columns_info])} FROM {table}")
+            self.cursor.execute(f"DROP TABLE {table}")
+            self.cursor.execute(f"ALTER TABLE temp_{table} RENAME TO {table}")
+            self.db.commit()
 
             return True
         else:
             return False
 
-
-    # def add_column(self, table, column, column_type):
-    #     self.cursor.execute(f"SELECT COUNT(*) FROM {table}")
-    #     count = self.cursor.fetchone()[0]
-    #     if (count > 0) and ("AUTOINCREMENT" in column_type):
-    #         return flash("AUTOINCREMENT не может быть применён, так как в таблице уже созданы строки")
-    #     columns = [row[1] for row in self.get_table_info(table)]
-    #     if column and column not in columns and column_type:
-    #         self.cursor.execute('ALTER TABLE %s ADD COLUMN %s INTEGER' % (table, column))
-    #         self.cursor.execute(f'ALTER TABLE {table} MODIFY COLUMN {column} NOT NULL')
-    #         self.db.commit()
-    #         return True
-    #     else:
-    #         return False
 
     def add_row(self, table):
         self.cursor.execute(f"PRAGMA table_info({table})")
@@ -341,10 +315,9 @@ def add_column(table):
         not_null = 'NOT NULL' if request.form.get('not_null') else ''
         unique = 'UNIQUE' if request.form.get('unique') else ''
         autoincrement = 'AUTOINCREMENT' if request.form.get('autoincrement') else ''
-        atr = unique
-        print(atr)
+        atr = unique + not_null + autoincrement
         if name and column_type:
-            success = dataset.add_column(table, name, f'{column_type} {atr}')
+            success = dataset.add_column(table, name, column_type, not_null, atr)
             if success:
                 flash('Столбец "%s" был успешно создан' % name, 'success')
             else:
