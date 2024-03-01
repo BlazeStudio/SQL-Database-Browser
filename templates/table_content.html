@@ -7,6 +7,49 @@ function hideContent(element) {
   element.textContent = ''; // Устанавливаем текст содержимого ячейки пустым
 }
 </script>
+    <script>
+document.addEventListener("DOMContentLoaded", function() {
+    var deleteButtons = document.querySelectorAll('.delete-row-btn');
+
+    deleteButtons.forEach(function(button) {
+        button.addEventListener('click', function() {
+            var rowData = [];
+            var rowCells = this.closest('tr').querySelectorAll('td');
+            rowCells.forEach(function(cell) {
+                var cellValue = cell.textContent.trim(); // Убираем пробелы в начале и конце
+                if (cellValue === "") {
+                    rowData.push("NULL"); // Заменяем пустые значения на "NULL"
+                } else {
+                    rowData.push(cellValue);
+                }
+            });
+            var table = $('#your_table').data('table');
+            // Выполняем асинхронный POST-запрос к серверу Flask
+            fetch('/delete_row', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ rowData: rowData, table: table })
+            })
+            .then(response => response.json())
+            .then(data => {
+                // Обработка ответа от сервера (если необходимо)
+                console.log(data);
+            })
+            .catch(error => {
+                console.error('Ошибка:', error);
+            });
+        });
+    });
+});
+    </script>
+<script>
+    function reloadPage() {
+        // Перезагрузить текущую страницу
+        window.location.reload();
+    }
+</script>
 {% endblock %}
 
 {% block content_tab_class %}active{% endblock %}
@@ -29,11 +72,20 @@ function hideContent(element) {
     </thead>
     <tbody>
       {% for column in columns %}
-        <tr>
-            {% for cell in column %}
-            <td style="border: 1px solid darkgrey" onclick="hideContent(this)" contenteditable>{% if cell == None %}<i style="color: darkgrey">Null</i>{% else %}{{ cell }}{% endif %}</td>
-            {% endfor %}
-        </tr>
+<tr>
+    {% for cell in column %}
+    <td style="border: 1px solid darkgrey" onclick="hideContent(this)" contenteditable>
+        {% if cell == None %}
+        <i style="color: darkgrey">Null</i>
+        {% else %}
+        {{ cell }}
+        {% endif %}
+    </td>
+    {% endfor %}
+    <td style="border: 1px solid darkgrey">
+        <button class="btn btn-danger btn-sm delete-row-btn" data-index="{{ loop.index0 }}" onclick="reloadPage()">Удалить</button>
+    </td>
+</tr>
       {% endfor %}
     </tbody>
   </table>

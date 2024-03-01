@@ -122,6 +122,36 @@ class SqliteTools():
             new_table, new_columns, old_columns, old_table)
         self.cursor.execute(sql)
 
+    def delete_row(self, table, row_data):
+        sql = self.cursor.execute('SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?',
+                                  [table, 'table']).fetchone()[0]
+        pattern = r"\((.*?)\)"
+        match = re.search(pattern, sql)
+        columns_string = match.group(1)
+        column_names = []
+        column_types = []
+        new_columns = [column.strip() for column in columns_string.split(',')]
+        for i in range(len(new_columns)):
+            column_names.append(new_columns[i].split(' ')[0])
+            if (' ' in new_columns[i]):
+                column_types.append(new_columns[i].split(' ')[1])
+            else:
+                column_types.append('')
+        sql_query = column_names[0] + ' = ' + row_data[0]
+        for i in range(1, len(new_columns)):
+            sql_query += ' AND ' + column_names[i]
+            if (row_data[i] is None) or (row_data[i] == 'Null'):
+                sql_query += ' IS NULL'
+            elif (column_types[i] == 'INTEGER') or (column_types[i] == 'INT'):
+                sql_query += ' = ' + row_data[i]
+            else: sql_query += ' = ' + "'" + row_data[i] + "'"
+        print(sql_query)
+        query = f'DELETE FROM {table} WHERE {sql_query}'
+        print(query)
+        self.cursor.execute(query)
+        self.db.commit()
+
+
     def delete_column(self, table, column):
         sql = self.cursor.execute('SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?',
                                   [table, 'table']).fetchone()[0]
@@ -211,7 +241,7 @@ class SqliteTools():
         self.cursor.execute(query)
         self.db.commit()
 
-    def rename_cloumn(self, table, rename, rename_to):
+    def rename_column(self, table, rename, rename_to):
         sql = self.cursor.execute('SELECT sql FROM sqlite_master WHERE tbl_name = ? AND type = ?',
                                   [table, 'table']).fetchone()[0]
         self.cursor.execute(
@@ -272,7 +302,7 @@ def rename_column(table):
         new_name = request.form.get('rename_to', '')
         rename = request.form.get('rename', '')
         if new_name and new_name not in column_names:
-            dataset.rename_cloumn(table, rename, new_name)
+            dataset.rename_column(table, rename, new_name)
             flash('Столбец "%s" успешно переименован!' % rename, 'success')
         else:
             flash('Название столбца не должно быть пустым или совпадать с другим', 'danger')
@@ -302,6 +332,15 @@ def delete_column(table):
         table=table,
         name=name)
 
+
+@app.route('/delete_row', methods=['POST'])
+def delete_row():
+    data = request.json
+    row_data = data['rowData']
+    table = data['table']
+    row_data.pop()
+    dataset.delete_row(table, row_data)
+    return redirect(url_for('table_content', table=table))
 
 
 @app.route('/<table>/add-column/', methods=['GET', 'POST'])
